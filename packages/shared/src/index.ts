@@ -1,3 +1,12 @@
+export {
+  ContractError,
+  AlertRegistryError,
+  ALERT_REGISTRY_ERROR_CODES,
+} from './errors';
+
+export { parseContractError } from './soroban-errors';
+export type { RawSorobanResponse } from './soroban-errors';
+
 export interface UserDTO {
   id: string;
   email: string;
