@@ -21,6 +21,10 @@ vi.mock('../../lib/stellar', () => ({
     getPaymentsSince: vi.fn(),
     getLatestPagingToken: vi.fn(),
   },
+  decodeHorizonAsset: vi.fn().mockImplementation((record: any) => ({
+    assetCode: record?.asset_type === 'native' ? 'XLM' : record?.asset_code || 'XLM',
+    assetIssuer: record?.asset_issuer || null,
+  })),
 }));
 
 vi.mock('../../lib/queue', () => ({

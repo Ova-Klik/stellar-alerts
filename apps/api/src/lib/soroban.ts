@@ -1,4 +1,9 @@
 import * as StellarSdk from 'stellar-sdk';
+import {
+  ContractError,
+  parseContractError,
+  type RawSorobanResponse,
+} from '@stellar-alerts/shared';
 
 const SOROBAN_RPC_URL = process.env.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org';
 
@@ -13,40 +18,55 @@ export interface ParsedSorobanTransfer {
 }
 
 /**
+ * Wraps a raw Soroban RPC error into a typed ContractError.
+ * If the error is already a ContractError, re-throws as-is.
+ */
+function wrapSorobanError(error: unknown, context: string): ContractError {
+  if (error instanceof ContractError) {
+    return error;
+  }
+
+  const raw = error as Record<string, unknown>;
+  if (raw && typeof raw === 'object' && ('result' in raw || 'error' in raw)) {
+    return parseContractError(raw as RawSorobanResponse);
+  }
+
+  const message =
+    error instanceof Error ? error.message : String(error);
+  return new ContractError(0, 'soroban_rpc', `[${context}] ${message}`);
+}
+
+/**
  * Fetches latest ledger sequence from Soroban RPC endpoint.
+ * @throws {ContractError} if the RPC call fails.
  */
 export async function getSorobanLatestLedger(): Promise<number> {
-  try {
-    const health = await sorobanServer.getLatestLedger();
-    return health.sequence;
-  } catch (error: any) {
-    console.warn(`[SorobanRPC] Could not fetch latest ledger: ${error.message}`);
-    return 0;
-  }
+  const health = await sorobanServer.getLatestLedger().catch((error: unknown) => {
+    throw wrapSorobanError(error, 'getSorobanLatestLedger');
+  });
+  return health.sequence;
 }
 
 /**
  * Fetches contract events from Soroban RPC for a specific contract address.
+ * @throws {ContractError} if the RPC call fails with a contract error.
  */
 export async function fetchContractEvents(
   contractId: string,
   startLedger: number
 ): Promise<any[]> {
-  try {
-    const response = await sorobanServer.getEvents({
-      startLedger,
-      filters: [
-        {
-          type: 'contract',
-          contractIds: [contractId],
-        },
-      ],
-    });
-    return response.events || [];
-  } catch (error: any) {
-    console.error(`[SorobanRPC] Error fetching contract events for ${contractId}:`, error.message);
-    return [];
-  }
+  const response = await sorobanServer.getEvents({
+    startLedger,
+    filters: [
+      {
+        type: 'contract',
+        contractIds: [contractId],
+      },
+    ],
+  }).catch((error: unknown) => {
+    throw wrapSorobanError(error, `fetchContractEvents(${contractId})`);
+  });
+  return response.events || [];
 }
 
 /**
